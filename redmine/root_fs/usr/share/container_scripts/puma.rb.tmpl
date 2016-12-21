@@ -1,0 +1,51 @@
+# Change to match your CPU core count
+workers ${NUMBER_OF_CORES}
+
+# Min and Max threads per worker
+threads 0, ${PUMA_RAILS_MAX_THREADS}
+
+app_dir = File.expand_path("../..", __FILE__)
+shared_dir = "#{app_dir}/shared"
+
+# Default to production
+rails_env = ENV['RAILS_ENV'] || "production"
+environment rails_env
+
+# Set up socket location
+#bind "unix://#{shared_dir}/sockets/puma.sock"
+bind "tcp://0.0.0.0:9292"
+
+# Logging
+#stdout_redirect "#{shared_dir}/log/puma.stdout.log", "#{shared_dir}/log/puma.stderr.log", true
+
+# Set master PID and state locations
+pidfile "#{shared_dir}/pids/puma.pid"
+state_path "#{shared_dir}/pids/puma.state"
+
+# Copy on write.
+preload_app!
+
+# https://github.com/schneems/puma_worker_killer
+before_fork do
+  PumaWorkerKiller.config do |config|
+    # how much RAM is available on your system
+    config.ram           = ${MEMORY_LIMIT_IN_MEGABYTES} # mb
+    # frequency of RAM check
+    config.frequency     = 5 # seconds
+    # RAM utilization
+    config.percent_usage = 0.98
+    # restart all of your workers rather than simply killing your largest
+    config.rolling_restart_frequency = 12 * 3600 # 12 hours in seconds
+    # PumaWorkerKiller logs
+    PumaWorkerKiller.reaper_status_logs = false
+  end
+  PumaWorkerKiller.start
+end
+
+
+on_worker_boot do
+  require "active_record"
+  ActiveRecord::Base.connection.disconnect! rescue ActiveRecord::ConnectionNotEstablished
+  ActiveRecord::Base.establish_connection(YAML.load_file("#{app_dir}/config/database.yml")[rails_env])
+end
+

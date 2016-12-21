@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+# Configuration of Gitolite server
+source "${CONTAINER_SCRIPTS_PATH}"/gitolite3_configuration
+
+# Start Gitolite server
+SSHD=$(which sshd)
+# man:sshd(8)
+exec ${SSHD} -D -e

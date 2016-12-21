@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# this script should be executed only by postgres 
+ID_POSTGRES=$(id -u postgres)
+if [ "$(id -u)" != "${ID_POSTGRES}" ] ; then
+  echo "This script must be run as postgres user|"
+  exit 1
+fi
+
+# check if this scritp is  being run in master or standby(s)
+psql -c 'CREATE DATABASE teste;'  >/dev/null 2>&1
+if [[ "$?" == "0" ]] ; then
+  psql -c 'DROP DATABASE teste;' >/dev/null 2>&1
+else
+	exit 0
+fi
+
+DUMPALL=`which pg_dumpall`
+PGDUMP=`which pg_dump`
+PSQL=`which psql`
+
+# directory to save backups in, must be rwx by postgres user
+BASE_DIR="${CONTAINER_VOLUME}/backup"
+YMD=$(date "+%Y%m%d%H00")
+DIR="$BASE_DIR/$YMD"
+mkdir -p $DIR
+cd $DIR
+
+# get list of databases in system , exclude the tempate dbs
+DBS=$($PSQL -l -t | grep UTF8 | egrep -v 'template[01]' | cut -d '|' -f 1 |sed -e '/^$\|^[[:space:]]\+$/d')
+
+# first dump entire postgres database, including pg_shadow etc.
+#$DUMPALL --inserts | gzip -9 > "$DIR/db.out.gz"
+
+# next dump globals (roles and tablespaces) only
+#$DUMPALL -g | gzip -9 > "$DIR/globals.gz"
+
+# now loop through each individual database and backup the schema and data separately
+for database in $DBS; do
+  SCHEMA=$DIR/$database.schema.gz
+  DATA=$DIR/$database.data.gz
+
+  # export data from postgres databases to plain text
+  echo "pg_dump schema of $database..."
+  $PGDUMP -s $database | gzip -9 > $SCHEMA
+
+  # dump data
+  echo "pg_dump data of $database..."
+  $PGDUMP -a $database | gzip -9 > $DATA
+done
+
+# delete backup files older than 30 days
+OLD=$(find $BASE_DIR -type d -mtime +30)
+if [ -n "$OLD" ] ; then
+  echo deleting old backup files: $OLD
+  echo $OLD | xargs rm -rfv
+fi

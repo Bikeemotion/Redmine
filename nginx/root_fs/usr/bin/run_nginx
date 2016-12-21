@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+# Configuration of Nginx server
+source "${CONTAINER_SCRIPTS_PATH}"/nginx_configuration
+
+# Start Nginx server
+exec nginx -g 'daemon off;'
+

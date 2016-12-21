@@ -1,0 +1,68 @@
+#shared memory zone called "perip" to store a log of IP addresses that access the rate limited URL(s). 10 MB (10m) will give us enough space to store a history of 160k requests. It will only allow 1 request per second (1r/s).
+#limit_req_zone $binary_remote_addr zone=perip:10m rate=1r/s;
+
+server {
+  listen       80;
+  #listen       [::]:80;
+
+  server_name  redmine.${DNS_DOMAIN};
+
+  # HTTP Server Overlapping ByteRange Denial of Service, CVE-2011-3192
+  if ($http_range ~ "(?:\d*\s*-\s*\d*\s*,\s*){5,}") { 
+    return 416;
+  }
+
+  # Redirect all HTTP links to the matching HTTPS page
+  return  301     https://$host$request_uri;
+
+}
+
+server {
+  listen       443 ssl;
+  #listen       [::]:443 ssl;
+
+  server_name  redmine.${DNS_DOMAIN};
+  #ssl_certificate             /etc/nginx/ssl/ssl-bundle-FRONTOFFICE.crt;
+  #ssl_certificate_key         /etc/nginx/ssl/FRONTOFFICE.key;
+  ssl_certificate /etc/letsencrypt/live/redmine.${DNS_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/redmine.${DNS_DOMAIN}/privkey.pem;
+
+  # Note: You should disable gzip for SSL traffic.
+  # See: https://bugs.debian.org/773332
+  #include /etc/nginx/include/common_nginx_gzip.conf;
+  include /etc/nginx/include/common_nginx_ssl.conf;
+  include /etc/nginx/include/common_nginx_headers.conf;
+  include /etc/nginx/include/common_nginx_rest.conf;
+
+  # HTTP Server Overlapping ByteRange Denial of Service, CVE-2011-3192
+  if ($http_range ~ "(?:\d*\s*-\s*\d*\s*,\s*){5,}") {
+    return 416;
+  }
+
+  #error_log /var/log/nginx/redmine_error.log;
+  #access_log /var/log/nginx/redmine_access.log;
+
+  location ~ /.well-known {
+    #http://stackoverflow.com/questions/10631933/nginx-static-file-serving-confusion-with-root-alias
+    root /usr/share/nginx/html;
+    allow all;
+  }
+
+  location / {
+    # apply rate limiting - dropping requests if more than 5 queue up from a specific IP
+    #limit_req               zone=perip burst=10;
+    proxy_pass              http://${PUMA_HOST}:9292;
+    proxy_ssl_session_reuse on;
+    proxy_redirect          off;
+    proxy_set_header        Host                $host;
+    proxy_set_header        X-Real-IP           $remote_addr;
+    proxy_set_header        X-Forwarded-For     $proxy_add_x_forwarded_for;
+    # as we talk to backend with http, we want to force that the client responses go in https
+    proxy_set_header        X-Forwarded-Host    $host:443;
+    proxy_set_header        X-Forwarded-Server  $host;
+    proxy_set_header        X-Forwarded-Port    443;
+    proxy_set_header        X-Forwarded-Proto   https;
+  }
+}
+
+

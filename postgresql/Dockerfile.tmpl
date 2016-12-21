@@ -1,0 +1,49 @@
+FROM ${REGISTRY}centos${FROM_DOCKERFILE_TAG}
+MAINTAINER bikeemotion <backend@bikeemotion.com>
+
+ENV CONTAINER_VOLUME=/var/lib/pgsql
+ENV PGDATA=${CONTAINER_VOLUME}/data
+
+RUN rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo && \
+    PKGS_TO_INSTALL="\
+      rh-postgresql95-postgresql-contrib-9.5.2-2.el7 \
+      rh-postgresql95-postgresql-server-9.5.2-2.el7 \
+      rsync-3.0.9-17.el7" && \
+    echo "Validating the existence of the following packages:" && \
+    for PKG in ${PKGS_TO_INSTALL}; do \
+      (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \
+    done && \
+    yum install -y --setopt=tsflags=nodocs ${PKGS_TO_INSTALL} && \
+    rm -fr /var/cache/yum/* && \
+    yum clean all && \
+    test "$(id postgres)" = "uid=26(postgres) gid=26(postgres) groups=26(postgres)" && \
+    mkdir -p ${PGDATA} && \
+    mkdir -p /var/run/postgresql && \
+    chown -R postgres /var/run/postgresql
+
+ADD root_fs/ /
+
+# Get prefix path and path to scripts rather than hard-code them in scripts
+ENV ENABLED_COLLECTIONS=rh-postgresql95
+
+RUN echo -e "#!/bin/bash\nsource scl_source enable ${ENABLED_COLLECTIONS}" > /etc/profile.d/enableSCLo.sh && \
+    chmod +x /etc/profile.d/enableSCLo.sh
+
+# When bash is started non-interactively, to run a shell script, for example it
+# looks for this variable and source the content of this file. This will enable
+# the SCL for all scripts without need to do 'scl enable'.
+ENV BASH_ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    PROMPT_COMMAND=". ${CONTAINER_SCRIPTS_PATH}/scl_enable"
+
+VOLUME ["${CONTAINER_VOLUME}"]
+
+USER postgres
+
+WORKDIR ${CONTAINER_VOLUME}
+
+# should define all ports in same line so that start-redmine works correctly
+EXPOSE 5432
+
+#CMD ["infinite_loop"]
+CMD ["run_postgresql"]

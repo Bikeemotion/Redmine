@@ -1,0 +1,47 @@
+FROM ${REGISTRY}centos${FROM_DOCKERFILE_TAG}
+MAINTAINER bikeemotion <backend@bikeemotion.com>
+
+ENV CONTAINER_VOLUME=/etc/letsencrypt
+
+RUN rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 && \
+    PKGS_TO_INSTALL="\
+      certbot-0.9.3-1.el7 \
+      nginx-1.10.2-1.el7" && \
+    echo "Validating the existence of the following packages:" && \
+    for PACKAGE in ${PKGS_TO_INSTALL}; do \
+      (echo "${PACKAGE}" && yum info ${PACKAGE} >> /dev/null 2>&1) || exit 1; \
+    done && \
+    yum install -y --setopt=tsflags=nodocs ${PKGS_TO_INSTALL} && \
+    rm -fr /var/cache/yum/* && \
+    yum clean all && \
+    openssl dhparam 2048 -out /etc/ssl/certs/dhparam.pem
+# https://raymii.org/s/tutorials/Strong_SSL_Security_On_nginx.html  
+# https://gist.github.com/kennwhite/25183c3f05266ee0ad7f
+# From the security point of view, you should choose the strength of DH parameters
+# to match the strength of the private key used by the server. In practice, most sites
+# use 2,048-bit private keys, which means that a 2,048-bit DH key exchange is going
+#to be adequate for virtually everyone. Using stronger DH parameters is not recom-
+# mended, as they significantly slow down the TLS handshake.
+
+# forward request and error logs to docker log collector
+RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
+    ln -sf /dev/stderr /var/log/nginx/error.log
+
+ADD root_fs/ /
+
+VOLUME ["${CONTAINER_VOLUME}"]
+
+# nginx package uses root as default uid of master pid (only worker use nginx uid)
+#USER nginx
+
+WORKDIR ${CONTAINER_VOLUME}
+
+# should define all ports in same line so that start-redmine works correctly
+EXPOSE 80 443 8080
+
+# /usr/lib/systemd/system/nginx.service
+STOPSIGNAL SIGQUIT
+
+#CMD ["infinite_loop"]
+CMD ["run_nginx"]
+

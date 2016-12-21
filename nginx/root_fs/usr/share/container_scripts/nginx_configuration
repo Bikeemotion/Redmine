@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+source "${CONTAINER_SCRIPTS_PATH}/variables_export"
+
+ls /usr/share/nginx/html/.well-known > /dev/null 2>&1 || mkdir /usr/share/nginx/html/.well-known
+ls /etc/nginx/conf.d/redmine.conf > /dev/null 2>&1 || { variables_to_replace '${DNS_DOMAIN}:${PUMA_HOST}' && \
+  envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/redmine.conf.templ" > "/etc/nginx/conf.d/redmine.conf"; }
+test "$(ls -A /etc/letsencrypt)" || /usr/bin/certbot certonly \
+  --non-interactive \
+  --agree-tos --email backend@${DNS_DOMAIN} \
+  --webroot -w /usr/share/nginx/html/.well-known -d redmine.${DNS_DOMAIN}
+nginx -t

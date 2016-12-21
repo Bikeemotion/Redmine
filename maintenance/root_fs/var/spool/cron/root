@@ -1,0 +1,4 @@
+# https://www.pantz.org/software/cron/croninfo.html
+@hourly date && docker exec -t postgresql "run_backup_postgresql"
+@daily date && docker exec -t postgresql "run_vacuum_postgresql"
+@daily date && docker exec -t nginx "run_renew_certbot"
