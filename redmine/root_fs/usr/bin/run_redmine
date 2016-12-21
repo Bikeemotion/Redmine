@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+# Configuration of Redmine server
+source "${CONTAINER_SCRIPTS_PATH}"/redmine_configuration
+
+# Start Redmine server
+#exec chroot --userspec=redmine:redmine / run-puma
+export HOME=${CONTAINER_VOLUME}/in_use
+cd ${HOME}
+exec bundle exec puma -C config/puma.rb

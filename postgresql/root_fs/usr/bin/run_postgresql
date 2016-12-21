@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+# Configuration of PostgreSQL server
+source "${CONTAINER_SCRIPTS_PATH}"/rh_postgresql95_configuration
+
+# Start PostgreSQL server
+exec postgres

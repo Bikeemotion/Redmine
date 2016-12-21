@@ -1,0 +1,3 @@
+Defaults:redmine !requiretty, !env_reset
+redmine ALL=(gitolite3) NOPASSWD:ALL
+redmine ALL=(root) NOPASSWD:ALL

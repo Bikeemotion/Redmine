@@ -1,0 +1,60 @@
+FROM ${REGISTRY}centos${FROM_DOCKERFILE_TAG}
+MAINTAINER bikeemotion
+
+ENV CONTAINER_VOLUME=/var/lib/gitolite3
+
+# we need to install ruby because redmine_git_hosting_plugin hooks
+RUN groupadd \
+      -g 1050 gitolite3 && \
+    useradd \
+      -u 1050 \
+      -g gitolite3 \
+      -M -d /var/lib/gitolite3 \
+      -s /bin/bash \
+      -c "git repository hosting" gitolite3 && \
+    rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 \
+      --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo && \
+    PKGS_TO_INSTALL="\
+      gitolite3-3.6.6-1.el7 \
+      openssh-server-6.6.1p1-31.el7 \
+      rh-ruby23-2.2-4.el7" && \
+    echo "Validating the existence of the following packages:" && \
+    for PKG in ${PKGS_TO_INSTALL}; do \
+      (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \
+    done && \
+    yum install -y --setopt=tsflags=nodocs ${PKGS_TO_INSTALL} && \
+    rm -fr /var/cache/yum/* && \
+    yum clean all && \
+    rm -f /etc/ssh/sshd_config && \
+    rm -f /etc/ssh/ssh_host_*key* && \
+    ssh-keygen -q -t ed25519 -N '' -f /etc/ssh/ssh_host_ed25519_key < /dev/null && \
+    ssh-keygen -q -t rsa -N '' -b 4096 -f /etc/ssh/ssh_host_rsa_key < /dev/null
+
+ADD root_fs/ /
+
+# Get prefix path and path to scripts rather than hard-code them in scripts
+ENV ENABLED_COLLECTIONS="rh-ruby23"
+
+RUN echo -e "#!/bin/bash\nsource scl_source enable ${ENABLED_COLLECTIONS}" > /etc/profile.d/enableSCLo.sh && \
+    chmod +x /etc/profile.d/enableSCLo.sh
+
+# When bash is started non-interactively, to run a shell script, for example it
+# looks for this variable and source the content of this file. This will enable
+# the SCL for all scripts without need to do 'scl enable'.
+ENV BASH_ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    PROMPT_COMMAND=". ${CONTAINER_SCRIPTS_PATH}/scl_enable"
+
+VOLUME ["${CONTAINER_VOLUME}"]]
+
+# as gitolite uses sshd, it must use root as default uid
+#USER gitolite3
+
+WORKDIR ${CONTAINER_VOLUME}
+
+# should define all ports in same line so that start-redmine works correctly
+EXPOSE 2222
+
+#CMD ["infinite_loop"]
+CMD ["run_gitolite"]
+

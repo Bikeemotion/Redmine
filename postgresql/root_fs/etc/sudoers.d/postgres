@@ -1,0 +1,2 @@
+Defaults:postgres !requiretty, !env_reset
+postgres ALL=(root) NOPASSWD:ALL

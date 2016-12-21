@@ -1,0 +1,81 @@
+FROM ${REGISTRY}centos${FROM_DOCKERFILE_TAG}
+MAINTAINER bikeemotion <backend@bikeemotion.com>
+
+ENV CONTAINER_VOLUME=/usr/local/src/redmine
+
+# we need to add gitolite3 to this machine because redmine_git_hosting used gitolite binary
+RUN groupadd \
+      -g 1050 gitolite3 && \
+    groupadd \
+      -g 1051 redmine && \
+    useradd \
+      -u 1050 \
+      -g gitolite3 \
+      -M -d /var/lib/gitolite3 gitolite3 && \ 
+    useradd \
+      -u 1051 \
+      -g redmine \
+      -M -d ${CONTAINER_VOLUME} redmine && \
+    rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo \
+      --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 && \
+    PKGS_TO_INSTALL="\
+      bzip2-1.0.6-13.el7 \
+      gdbm-1.10-8.el7 \
+      git-1.8.3.1-6.el7_2.1 \
+      gitolite3-3.6.6-1.el7 \
+      ImageMagick-6.7.8.9-15.el7_2 \
+      ipa-pgothic-fonts-003.03-5.el7 \
+      libffi-devel-3.0.13-18.el7 \
+      libyaml-devel-0.1.4-11.el7_0 \
+      openssl-devel-1.0.1e-60.el7 \
+      rh-postgresql95-postgresql-9.5.2-2.el7 \
+      rh-ruby23-2.2-4.el7 \
+      rh-ruby23-rubygem-bundler-1.10.6-4.el7 \
+      zlib-devel-1.2.7-17.el7" && \
+    echo "Validating the existence of the following packages:" && \
+    for PKG in ${PKGS_TO_INSTALL}; do \
+      (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \
+    done && \
+    yum install -y --setopt=tsflags=nodocs ${PKGS_TO_INSTALL} && \
+    rm -fr /var/cache/yum/* && \
+    yum clean all
+
+#ENV REDMINE_VERSION=3.1.7 \
+#    REDMINE_DOWNLOAD_MD5=625b7705b70521a205491a53f6df506a
+
+#ENV REDMINE_VERSION=3.2.4 \
+#    REDMINE_DOWNLOAD_MD5=fe9c81d9abdf21ddafd03f5d1c1f8a58
+
+ENV REDMINE_VERSION=3.3.0 \
+    REDMINE_DOWNLOAD_MD5=0c0abb2d4efde455c3505d8caf01cb2d
+
+#ENV REDMINE_VERSION=3.3.1 \
+#REDMINE_DOWNLOAD_MD5=cb8aab3e03cae7d21d003a307e51c176
+
+ADD root_fs/ /
+
+# Get prefix path and path to scripts rather than hard-code them in scripts
+ENV ENABLED_COLLECTIONS="rh-postgresql95 rh-ruby23"
+
+RUN echo -e "#!/bin/bash\nsource scl_source enable ${ENABLED_COLLECTIONS}" > /etc/profile.d/enableSCLo.sh && \
+    chmod +x /etc/profile.d/enableSCLo.sh
+
+# When bash is started non-interactively, to run a shell script, for example it
+# looks for this variable and source the content of this file. This will enable
+# the SCL for all scripts without need to do 'scl enable'.
+ENV BASH_ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    PROMPT_COMMAND=". ${CONTAINER_SCRIPTS_PATH}/scl_enable"
+
+VOLUME ["${CONTAINER_VOLUME}"]
+
+USER redmine
+
+WORKDIR ${CONTAINER_VOLUME}
+
+# should define all ports in same line so that start-redmine works correctly
+EXPOSE 9292
+
+#CMD ["infinite_loop"]
+CMD ["run_redmine"]
+

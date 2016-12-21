@@ -1,0 +1,14 @@
+# default configuration options for all environments
+production:
+  email_delivery:
+    delivery_method: :async_smtp
+    async_smtp_settings:
+      enable_starttls_auto: true
+      address: smtp.sendgrid.net
+      port: 2525
+      authentication: :login
+      user_name: ${SENDGRID_USER}
+      password: ${SENDGRID_PASSWORD} 
+
+  scm_git_command: /usr/bin/git
+  rmagick_font_path: /usr/share/fonts/ipa-pgothic/ipagp.ttf

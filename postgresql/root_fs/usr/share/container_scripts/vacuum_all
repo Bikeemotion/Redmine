@@ -1,0 +1,21 @@
+#!/bin/bash
+echo -en "$(date +%Y%m%d-%H%M) - Validating if local postgresql is master ..."
+psql -c 'DROP DATABASE teste;'  >/dev/null 2>&1
+psql -c 'CREATE DATABASE teste;'  >/dev/null 2>&1
+if [[ "$?" == "0" ]] ; then
+  echo "Yes it is"
+  psql -c 'DROP DATABASE teste;'  >/dev/null 2>&1
+  DBS=$(psql -l -t | egrep -v 'template[01]' | cut -d '|' -f 1 |sed -e '/^$\|^[[:space:]]\+$/d')
+  for DATABASE in $DBS; do
+    psql -c "ALTER DATABASE ${DATABASE} CONNECTION LIMIT 0;" >/dev/null 2>&1
+    psql -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DATABASE}';"
+    echo "Starting manual vaccum in ${DATABASE} at $(date +%Y%m%d-%H%M)"
+    vacuumdb -fz ${DATABASE}
+    reindexdb -d ${DATABASE}
+    psql -c "ALTER DATABASE ${DATABASE} CONNECTION LIMIT -1;" >/dev/null 2>&1
+  done
+  echo "Finished at $(date +%Y%m%d-%H%M)"
+else
+  echo "No it isn't"
+fi
+

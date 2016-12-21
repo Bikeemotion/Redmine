@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+: '
+You must either specify the following environment variables in docker run:
+  POSTGRESQL_USER (docker environment variable)
+  POSTGRESQL_PASSWORD (docker environment variable)
+  POSTGRESQL_DATABASE (docker environment variable)
+  POSTGRESQL_NODE_TYPE (docker environment variable)
+  POSTGRESQL_REPLICATION_ENABLED (docker environment variable)
+Optional settings:
+  POSTGRESQL_MAX_CONNECTIONS (default: 100) -> replaced by NUMBER_OF_CORES * PUMA_RAILS_MAX_THREADS
+  POSTGRESQL_AUTOVACUUM_MAX_WORKERS (default: 3)
+
+values for pgtune web retrieved from http://pgtune.leopard.in.ua/
+'
+
+source "${CONTAINER_SCRIPTS_PATH}"/variables_export
+source "${CONTAINER_SCRIPTS_PATH}"/cgroup_limits
+
+PGHOME="${CONTAINER_VOLUME}"
+PGRECOVERY="${PGHOME}/base_pgsql_recovery.conf"
+PGCONFIG="${PGHOME}/base_pgsql_configuration.conf"
+PGREPLICATION="${PGHOME}/base_pgsql_replication.conf"
+#POSTGRESQL_MAX_CONNECTIONS="${POSTGRESQL_MAX_CONNECTIONS:-100}"
+POSTGRESQL_MAX_CONNECTIONS="$((${NUMBER_OF_CORES} * ${PUMA_RAILS_MAX_THREADS}))"
+POSTGRESQL_AUTOVACUUM_MAX_WORKERS="${POSTGRESQL_AUTOVACUUM_MAX_WORKERS:-3}"
+POSTGRESQL_LOG_LINE_PREFIX='%t [%p]: [%l-1] user=%u,db=%d'
+POSTGRESQL_LOG_CHECKPOINTS='on'
+POSTGRESQL_LOG_CONNECTIONS='off'
+POSTGRESQL_LOG_LOCK_WAITS='on'
+POSTGRESQL_LOG_TEMP_FILES='0'
+POSTGRESQL_LOG_STATEMENT='ddl'
+POSTGRESQL_LOG_MIN_DURATION_STATEMENT='100'
+POSTGRESQL_LOG_AUTOVACUUM_MIN_DURATION='0'
+
+if [[ "${NO_MEMORY_LIMIT}" != "true"  && -n "${MEMORY_LIMIT_IN_BYTES}" ]]; then
+  # pgtune web: 25% RAM but no more than 8G
+  POSTGRESQL_SHARED_BUFFERS=$((${MEMORY_LIMIT_IN_BYTES}/1024/4))
+  if [[ "${POSTGRESQL_SHARED_BUFFERS}" -gt "8388608" ]]; then
+    POSTGRESQL_SHARED_BUFFERS="8388608"
+  fi
+  # pgtune web: 75% RAM
+  POSTGRESQL_EFFECTIVE_CACHE_SIZE=$((${MEMORY_LIMIT_IN_BYTES}/1024-${POSTGRESQL_SHARED_BUFFERS}))
+  # pgtune web: (RAM - shared_buffers)/max_connections
+  POSTGRESQL_WORK_MEM=$((${POSTGRESQL_EFFECTIVE_CACHE_SIZE}/${POSTGRESQL_MAX_CONNECTIONS}))
+  # pgtune web: shared_buffer/16
+  POSTGRESQL_MAINTENANCE_WORK_MEM=$((${POSTGRESQL_SHARED_BUFFERS}/${POSTGRESQL_AUTOVACUUM_MAX_WORKERS}))
+  # pgtune web: 0.7
+  POSTGRESQL_CHECKPOINT_COMPLETION_TARGET=0.7
+else
+  echo "This container needs to be started with memory limit defined!"
+  exit 1
+fi
+
+sudo /usr/libexec/fix_permissions postgres ${PGHOME}
+sudo /usr/libexec/fix_permissions postgres /var/run/postgresql
+
+if [[ ! -f "${PGDATA}/PG_VERSION" ]]; then
+  # generate postgresql config files
+  POSTGRESQL_SHARED_BUFFERS=${POSTGRESQL_SHARED_BUFFERS}kB
+  POSTGRESQL_EFFECTIVE_CACHE_SIZE=${POSTGRESQL_EFFECTIVE_CACHE_SIZE}kB
+  POSTGRESQL_WORK_MEM=${POSTGRESQL_WORK_MEM}kB
+  POSTGRESQL_MAINTENANCE_WORK_MEM=${POSTGRESQL_MAINTENANCE_WORK_MEM}kB
+  variables_to_replace '${LANG}:${POSTGRESQL_MAX_CONNECTIONS}:${POSTGRESQL_AUTOVACUUM_MAX_WORKERS}:${POSTGRESQL_LOG_LINE_PREFIX}:${POSTGRESQL_LOG_CHECKPOINTS}:${POSTGRESQL_LOG_CONNECTIONS}:${POSTGRESQL_LOG_LOCK_WAITS}:${POSTGRESQL_LOG_TEMP_FILES}:${POSTGRESQL_LOG_STATEMENT}:${POSTGRESQL_LOG_MIN_DURATION_STATEMENT}:${POSTGRESQL_LOG_AUTOVACUUM_MIN_DURATION}:${POSTGRESQL_SHARED_BUFFERS}:${POSTGRESQL_EFFECTIVE_CACHE_SIZE}:${POSTGRESQL_WORK_MEM}:${POSTGRESQL_MAINTENANCE_WORK_MEM}:${POSTGRESQL_CHECKPOINT_COMPLETION_TARGET}'
+  touch ${PGCONFIG}
+  envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/pgsql_configuration.conf.template" > "${PGCONFIG}"
+  if [[ "${ENABLE_REPLICATION}" == "true" ]]; then
+    #variables_to_replace ''
+    #envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/pgsql_replication.conf.template" >> "${PGCONFIG}"
+    touch ${PGREPLICATION}
+    envsubst < "${CONTAINER_SCRIPTS_PATH}/pgsql_replication.conf.template" >> "${PGREPLICATION}"
+  fi
+  #export PGSETUP_INITDB_OPTIONS="--auth-host=md5 --locale=${LANG}"
+  #postgresql-setup --initdb --unit rh-postgresql95-postgresql
+  initdb --auth-host=md5 --locale=${LANG} --pgdata=${PGDATA}
+fi
+
+if [[ ! -f "${PGDATA}/postgresql.conf.default" ]]; then
+  mv ${PGDATA}/postgresql.conf ${PGDATA}/postgresql.conf.default
+  cat ${PGCONFIG} > ${PGDATA}/postgresql.conf
+  if [[ "${ENABLE_REPLICATION}" == "true" ]]; then
+     cat ${PGREPLICATION} >> ${PGDATA}/postgresql.conf
+  fi
+
+  pg_ctl -D ${PGDATA} -w start
+  createuser --createdb ${POSTGRESQL_USER}
+  createdb --owner=${POSTGRESQL_USER} ${POSTGRESQL_DATABASE}
+  psql --command "ALTER USER ${POSTGRESQL_USER} WITH ENCRYPTED PASSWORD '${POSTGRESQL_PASSWORD}';";
+  pg_ctl -D ${PGDATA} -m fast -w stop
+fi
+
+if [[ ! -f "${PGDATA}/pg_hba.conf.default" ]]; then
+  DEFAULT_IF=$(ip route list | awk '/^default/ {print $NF}')
+  NETWORK_IF=$(ip -o -f inet addr show ${DEFAULT_IF} | awk '{print $4}')
+  cp ${PGDATA}/pg_hba.conf ${PGDATA}/pg_hba.conf.default
+  echo -e "host\tall\t\t${POSTGRESQL_USER}\t${NETWORK_IF}\tmd5" >> ${PGDATA}/pg_hba.conf
+fi

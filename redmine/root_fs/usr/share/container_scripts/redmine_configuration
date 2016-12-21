@@ -1,0 +1,197 @@
+#!/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+source "${CONTAINER_SCRIPTS_PATH}/variables_export"
+source "${CONTAINER_SCRIPTS_PATH}/cgroup_limits"
+
+function extract_redmine() {
+  mkdir -p ${REDMINE_LOCATION}
+  cd ${REDMINE_LOCATION}
+  curl -fSL "https://www.redmine.org/releases/redmine-${REDMINE_VERSION}.tar.gz" -o redmine.tar.gz
+  echo "${REDMINE_DOWNLOAD_MD5} redmine.tar.gz" | md5sum -c -
+  if [[ "$?" -ne 0 ]]; then
+    exit 1
+  fi
+  tar -xvf redmine.tar.gz --strip-components=1
+  rm -f redmine.tar.gz files/delete.me log/delete.me
+  envsubst < "${CONTAINER_SCRIPTS_PATH}/redmine_database.yml.tmpl" > "config/database.yml"
+  variables_to_replace '${SENDGRID_USER}:${SENDGRID_PASSWORD}'
+  envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/redmine_configuration.yml.tmpl" > "config/configuration.yml"
+  mkdir -p shared/{log,pids}
+  # this folder will only be use when upgrading redmine versions
+  mkdir backup
+}
+
+function bundle_execution() {
+  # make removed from BUNDLE_INSTALL_REQUIREMENTS variable because nginx (from epel repo) already as him as dependancy
+  BUNDLE_INSTALL_REQUIREMENTS="bzip2-devel-1.0.6-13.el7 \
+    cmake-2.8.12.2-2.el7 \
+    cpp-4.8.5-11.el7 \
+    freetype-devel-2.4.11-12.el7 \
+    gcc-4.8.5-11.el7 \
+    gcc-c++-4.8.5-11.el7 \
+    ghostscript-devel-9.07-20.el7 \
+    glibc-devel-2.17-157.el7_3.1 \
+    glibc-headers-2.17-157.el7_3.1 \
+    ImageMagick-devel-6.7.8.9-15.el7_2 \
+    jasper-devel-1.900.1-29.el7 \
+    kernel-headers-3.10.0-514.2.2.el7 \
+    libgpg-error-devel-1.12-3.el7 \
+    libICE-devel-1.0.9-2.el7 \
+    libjpeg-turbo-devel-1.2.90-5.el7 \
+    libmpc-1.0.1-3.el7 \
+    libSM-devel-1.2.2-2.el7 \
+    libssh2-devel-1.4.3-10.el7_2.1 \
+    libstdc++-devel-4.8.5-11.el7 \
+    libtiff-devel-4.0.3-25.el7_2 \
+    libX11-devel-1.6.3-3.el7 \
+    libXau-devel-1.0.8-2.1.el7 \
+    libxcb-devel-1.11-4.el7 \
+    libXext-devel-1.3.3-3.el7 \
+    libXt-devel-1.1.4-6.1.el7 \
+    make-3.82-23.el7 \
+    mpfr-3.1.1-4.el7 \
+    rh-postgresql95-postgresql-devel-9.5.2-2.el7 \
+    rh-ruby23-ruby-devel-2.3.1-64.el7 \
+    xorg-x11-proto-devel-7.7-13.el7"
+  echo "Validating the existence of the following packages:" && \
+  for PACKAGE in ${BUNDLE_INSTALL_REQUIREMENTS}; do \
+    (echo "${PACKAGE}" && sudo yum info ${PACKAGE} >> /dev/null 2>&1) || exit 1; \
+  done
+  sudo yum install -y --setopt=tsflags=nodocs ${BUNDLE_INSTALL_REQUIREMENTS}
+  echo -e "gem 'puma', '3.6.0'\ngem 'puma_worker_killer'" > Gemfile.local
+  #/usr/libexec/fix_permissions redmine ${REDMINE_LOCATION}
+  env > ${REDMINE_LOCATION}/environment
+  # we are going to install all gems locacly to redmine so it easy to revert to previous with the older gems versions
+  cd ${REDMINE_LOCATION}
+  bundle install --without development test --path vendor/bundle
+  bundle exec rake generate_secret_token
+  bundle exec rake db:migrate RAILS_ENV=production
+  bundle exec rake redmine:plugins:migrate RAILS_ENV=production
+  bundle exec rake tmp:cache:clear tmp:sessions:clear RAILS_ENV=production
+  if [[ "${REDMINE_EXISTING}" = "false" ]]; then
+    bundle exec rake redmine:load_default_data RAILS_ENV=production REDMINE_LANG=en
+    #Login with the default username/password "admin/admin"
+  fi
+  variables_to_replace '${NUMBER_OF_CORES}:${PUMA_RAILS_MAX_THREADS}:${MEMORY_LIMIT_IN_MEGABYTES}'
+  envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/puma.rb.tmpl" > "${REDMINE_LOCATION}/config/puma.rb"
+  sudo yum remove ${BUNDLE_INSTALL_REQUIREMENTS} -y
+  sudo yum clean all
+}
+
+function redmine_inuse() {
+  local VERSION=$(readlink -- "${CONTAINER_VOLUME}/in_use")
+  local VERSION=${VERSION##*redmine-}
+  echo ${VERSION}
+}
+
+function redmine_upgrade() {
+  cp ${CONTAINER_VOLUME}/in_use/config/database.yml ${REDMINE_LOCATION}/config/database.yml > /dev/null 2>&1
+  cp ${CONTAINER_VOLUME}/in_use/config/configuration.yml ${REDMINE_LOCATION}/config/configuration.yml > /dev/null 2>&1
+  cp -R ${CONTAINER_VOLUME}/in_use/files/* ${REDMINE_LOCATION}/files/ > /dev/null 2>&1
+  cp -R ${CONTAINER_VOLUME}/in_use/plugins/* ${REDMINE_LOCATION}/plugins/ > /dev/null 2>&1
+  bundle_execution
+  PREVIOUS_VERSION=$(redmine_inuse)
+  echo "${PREVIOUS_VERSION}" > ${REDMINE_LOCATION}/previous_used_redmine_version
+  rm -rf ${CONTAINER_VOLUME}/in_use
+}
+
+function backup_postgresql() {
+  rm ${CONTAINER_VOLUME}/in_use/backup/redmine.sqlc  > /dev/null 2>&1
+  check_postgresql_server ${POSTGRESQL_DATABASE}
+  pg_dump --format=c \
+    --file=${CONTAINER_VOLUME}/in_use/backup/redmine.sqlc \
+    --host=${POSTGRESQL_HOST} ${POSTGRESQL_DATABASE}
+}
+
+function check_postgresql_server() {
+  LOCAL_DATABASE=$1
+  RESULT=0
+  while [[ "${RESULT}" -ne 1 ]]; do
+    # http://ss64.com/bash/syntax-brackets.html
+    { psql -h ${POSTGRESQL_HOST} -d ${LOCAL_DATABASE} -U ${POSTGRESQL_USER} -c '\l' > /dev/null 2>&1 && RESULT=1; }  || \
+      (echo "Sleeping for 10 seconds ..." && sleep 10)
+  done
+}
+
+function version_to_integer() {
+  echo "${1//.}"
+}
+
+function new_installation() {
+  REDMINE_EXISTING=false
+  echo "Going to install redmine ${REDMINE_VERSION}..."
+  ls ${REDMINE_LOCATION}/Gemfile* > /dev/null 2>&1 || { extract_redmine && bundle_execution; }
+}
+
+function existing_installation() {
+  # there is already a redmine instalation
+  USED_VERSION=$(redmine_inuse)
+  ls ${REDMINE_LOCATION} > /dev/null 2>&1
+  if [[ "$?" -ne 0 ]]; then
+    echo "Going to install redmine ${REDMINE_VERSION} and upgrade the existing redmine ${USED_VERSION}..."
+    REDMINE_EXISTING=true
+    backup_postgresql
+    if [[ "$?" -eq 0 ]]; then
+      extract_redmine
+      redmine_upgrade
+    fi
+  else
+    if [[ $(version_to_integer "${REDMINE_VERSION}") -gt $(version_to_integer "${USED_VERSION}") ]]; then
+      echo "Upgrading redmine ${USED_VERSION} to existing ${REDMINE_VERSION}..."
+      rm -rf ${REDMINE_LOCATION}/config/database.yml \
+        ${REDMINE_LOCATION}/config/configuration.yml \
+        ${REDMINE_LOCATION}/files/* \
+        ${REDMINE_LOCATION}/plugins/*
+      redmine_upgrade
+    elif [[ $(version_to_integer "${REDMINE_VERSION}") -lt $(version_to_integer "${USED_VERSION}") ]]; then
+      PREVIOUS_REDMINE="$(cat ${CONTAINER_VOLUME}/in_use/previous_used_redmine_version)" > /dev/null 2>&1
+      if [[ "${PREVIOUS_REDMINE}" = "${REDMINE_VERSION}" ]]; then
+        echo "Downgrading redmine ${USED_VERSION} to ${REDMINE_VERSION}..."
+        # if we are going to downgrade we don't need to backup the in_use version
+        #backup_postgresql
+        psql -h ${POSTGRESQL_HOST} -d postgres -U ${POSTGRESQL_USER} -c 'DROP DATABASE ${POSTGRESQL_DATABASE};' > /dev/null 2>&1
+        psql -h ${POSTGRESQL_HOST} -d postgres -U ${POSTGRESQL_USER} -c 'CREATE DATABASE ${POSTGRESQL_DATABASE} WITH OWNER ${POSTGRESQL_USER};' > /dev/null 2>&1
+        # https://community.webfaction.com/questions/5352/comand-line-dump-restore-postgresql-database-in-place
+        pg_restore --verbose \
+          --schema public \
+          --clean \
+          --if-exists \
+          --single-transaction \
+          --host=${POSTGRESQL_HOST} \
+          --dbname ${POSTGRESQL_DATABASE} ${CONTAINER_VOLUME}/redmine-${REDMINE_VERSION}/backup/redmine.sqlc
+        RESULT="$?"
+        if [[ "${RESULT}" != "0" ]]; then
+          exit 1
+        else
+          rm -rf ${CONTAINER_VOLUME}/in_use
+        fi
+      else
+        if [[ -n "${PREVIOUS_REDMINE}" ]]; then
+          echo "We can't downgrade redmine ${USED_VERSION} to ${REDMINE_VERSION} because the previous instalation was ${PREVIOUS_REDMINE}"
+        else
+          echo "We can't downgrade redmine ${USED_VERSION} to ${REDMINE_VERSION} because i couldn't detect previous instalation version"
+        fi
+      fi
+    else
+      echo "The redmine ${REDMINE_VERSION} is already installed and in use"    
+    fi
+  fi
+
+}
+
+function fix_symbolic_in_use () {
+  ln -s ${REDMINE_LOCATION} ${CONTAINER_VOLUME}/in_use
+  #/usr/libexec/fix_permissions redmine ${CONTAINER_VOLUME}/in_use
+}
+
+
+sudo /usr/libexec/fix_permissions redmine ${CONTAINER_VOLUME}
+ls ${CONTAINER_VOLUME}/.pgpass > /dev/null 2>&1 || { echo "*:*:*:${POSTGRESQL_USER}:${POSTGRESQL_PASSWORD}" > ${CONTAINER_VOLUME}/.pgpass && \
+  chmod 0600 ${CONTAINER_VOLUME}/.pgpass; }
+check_postgresql_server ${POSTGRESQL_DATABASE}
+REDMINE_LOCATION="${CONTAINER_VOLUME}/redmine-${REDMINE_VERSION}"
+{ ls ${CONTAINER_VOLUME}/in_use  > /dev/null 2>&1 && existing_installation; } || new_installation
+ls ${CONTAINER_VOLUME}/in_use  > /dev/null 2>&1 || fix_symbolic_in_use

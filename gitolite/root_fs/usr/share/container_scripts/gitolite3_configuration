@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -e
+
+source "${CONTAINER_SCRIPTS_PATH}/variables_export"
+source "${CONTAINER_SCRIPTS_PATH}/cgroup_limits"
+
+MAX_SESSIONS=$(awk -v NC="${NUMBER_OF_CORES}" 'BEGIN { print 2*NC+1 }')
+GIT_WINDOWS_MEMORY=$(awk -v MS="${MAX_SESSIONS}" -v MLM="${MEMORY_LIMIT_IN_MEGABYTES}" 'BEGIN { print MLM/MS }' | cut -d. -f1)
+GIT_PACKED_GIT_LIMIT=$(awk -v GWM="${GIT_WINDOWS_MEMORY}" 'BEGIN { print GWM/4 }' | cut -d. -f1)
+GIT_PACKED_GIT_WINDOW_SIZE=$(awk -v GPGL="${GIT_PACKED_GIT_LIMIT}" 'BEGIN { print GPGL/8 }' | cut -d. -f1)
+
+/usr/libexec/fix_permissions gitolite3 ${CONTAINER_VOLUME}
+variables_to_replace '${MAX_SESSIONS}'
+envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/sshd_config.tmpl" > "/etc/ssh/sshd_config"
+ls "${CONTAINER_VOLUME}"/.ssh/gitolite_admin > /dev/null 2>&1 || su gitolite3 -c "ssh-keygen -N '' -f ~/.ssh/gitolite_admin"
+ls "${CONTAINER_VOLUME}"/.ssh/config > /dev/null 2>&1 || su - gitolite3 -c "echo -e 'Host localhost\nHostname localhost\nPort 2222\nUser gitolite3\nIdentityFile ~/.ssh/gitolite_admin\nStrictHostKeyChecking no\nUserKnownHostsFile /dev/null' > ~/.ssh/config && chmod 0600 .ssh/config"
+ls "${CONTAINER_VOLUME}"/.ssh/environment > /dev/null 2>&1 || su - gitolite3 -c "scl enable rh-ruby23 env > ~/.ssh/environment && chmod 0600 ~/.ssh/environment"
+ls "${CONTAINER_VOLUME}"/.gitolite.rc > /dev/null 2>&1 || su - gitolite3 -c "gitolite setup -pk ~/.ssh/gitolite_admin.pub"
+# Git repack's memory use is: (pack.deltaCacheSize + pack.windowMemory) × pack.threads. Respective defaults are 256MiB, unlimited, nproc.
+ls "${CONTAINER_VOLUME}"/.gitconfig > /dev/null 2>&1 || (su - gitolite3 -c "git config --global user.name gitolite3 && \
+  git config --global user.email gitolite3@$(hostname) && \
+  git config --global push.default simple && \
+  git config --global pack.deltaCacheSize 1 && \
+  git config --global pack.thread 1 && \
+  git config --global pack.windowMemory ${GIT_WINDOWS_MEMORY}m && \
+  git config --global pack.packSizeLimit ${GIT_WINDOWS_MEMORY}m && \
+  git config --global core.packedGitLimit ${GIT_PACKED_GIT_LIMIT}m && \
+  git config --global core.packedGitWindowSize ${GIT_PACKED_GIT_WINDOW_SIZE}m")
+fgrep "#'gitweb'" .gitolite.rc > /dev/null 2>&1 || sed -i "/GIT_CONFIG_KEYS/ s|''|'.*'|g; \
+  /ENV{HOME}\/local/ s|# LOCAL_CODE|LOCAL_CODE|g; \
+  s|'daemon',|#'daemon',|g; \
+  s|'gitweb',|#'gitweb',|g" "${CONTAINER_VOLUME}"/.gitolite.rc

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# to renew lets encrypt certs and reload nginx (retrieved information of reload of /usr/lib/systemd/system/nginx.service)
+{ certbot renew && kill -s HUP $(cat /run/nginx.pid); } > ${CONTAINER_VOLUME}/last_try_letsencrypt_renew.log 2>&1
