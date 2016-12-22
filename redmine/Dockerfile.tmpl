@@ -3,7 +3,7 @@ MAINTAINER bikeemotion <backend@bikeemotion.com>
 
 ENV CONTAINER_VOLUME=/usr/local/src/redmine
 
-# we need to add gitolite3 to this machine because redmine_git_hosting used gitolite binary
+# we need to add git-annex/gitolite3 to this machine because redmine_git_hosting uses its binaries
 RUN groupadd \
       -g 1050 gitolite3 && \
     groupadd \
@@ -22,6 +22,7 @@ RUN groupadd \
       bzip2-1.0.6-13.el7 \
       gdbm-1.10-8.el7 \
       git-1.8.3.1-6.el7_2.1 \
+      git-annex-5.20140221-1.1.el7 \
       gitolite3-3.6.6-1.el7 \
       ImageMagick-6.7.8.9-15.el7_2 \
       ipa-pgothic-fonts-003.03-5.el7 \

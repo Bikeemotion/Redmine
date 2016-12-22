@@ -15,6 +15,7 @@ RUN groupadd \
     rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 \
       --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo && \
     PKGS_TO_INSTALL="\
+      git-annex-5.20140221-1.1.el7 \
       gitolite3-3.6.6-1.el7 \
       openssh-server-6.6.1p1-31.el7 \
       rh-ruby23-2.2-4.el7" && \

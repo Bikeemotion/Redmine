@@ -28,7 +28,8 @@ ls "${CONTAINER_VOLUME}"/.gitconfig > /dev/null 2>&1 || (su - gitolite3 -c "git 
   git config --global pack.packSizeLimit ${GIT_WINDOWS_MEMORY}m && \
   git config --global core.packedGitLimit ${GIT_PACKED_GIT_LIMIT}m && \
   git config --global core.packedGitWindowSize ${GIT_PACKED_GIT_WINDOW_SIZE}m")
-fgrep "#'gitweb'" .gitolite.rc > /dev/null 2>&1 || sed -i "/GIT_CONFIG_KEYS/ s|''|'.*'|g; \
+fgrep "#'gitweb'" .gitolite.rc > /dev/null 2>&1 || { sed -i "/GIT_CONFIG_KEYS/ s|''|'.*'|g; \
   /ENV{HOME}\/local/ s|# LOCAL_CODE|LOCAL_CODE|g; \
   s|'daemon',|#'daemon',|g; \
-  s|'gitweb',|#'gitweb',|g" "${CONTAINER_VOLUME}"/.gitolite.rc
+  s|'gitweb',|#'gitweb',|g" "${CONTAINER_VOLUME}"/.gitolite.rc && \
+  sed -ie "/# COMMANDS/i \ \t# enable the git-annex-shell command\n\t'git-annex-shell ua',\n" "${CONTAINER_VOLUME}"/.gitolite.rc; }
