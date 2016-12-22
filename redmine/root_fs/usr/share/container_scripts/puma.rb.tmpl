@@ -27,6 +27,7 @@ preload_app!
 
 # https://github.com/schneems/puma_worker_killer
 before_fork do
+  ActiveRecord::Base.connection_pool.disconnect!
   PumaWorkerKiller.config do |config|
     # how much RAM is available on your system
     config.ram           = ${MEMORY_LIMIT_IN_MEGABYTES} # mb
@@ -44,8 +45,8 @@ end
 
 
 on_worker_boot do
-  require "active_record"
-  ActiveRecord::Base.connection.disconnect! rescue ActiveRecord::ConnectionNotEstablished
-  ActiveRecord::Base.establish_connection(YAML.load_file("#{app_dir}/config/database.yml")[rails_env])
+  ActiveSupport.on_load(:active_record) do
+    ActiveRecord::Base.establish_connection
+  end
 end
 
