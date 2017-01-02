@@ -11,5 +11,5 @@ ls /etc/nginx/conf.d/redmine.conf > /dev/null 2>&1 || { variables_to_replace '${
 test "$(ls -A /etc/letsencrypt)" || /usr/bin/certbot certonly \
   --non-interactive \
   --agree-tos --email backend@${DNS_DOMAIN} \
-  --webroot -w /usr/share/nginx/html/.well-known -d redmine.${DNS_DOMAIN}
+  --webroot -w /usr/share/nginx/html -d redmine.${DNS_DOMAIN}
 nginx -t
