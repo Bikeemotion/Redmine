@@ -1,10 +1,10 @@
 #!/bin/bash
 echo -en "$(date +%Y%m%d-%H%M) - Validating if local postgresql is master ..."
-psql -c 'DROP DATABASE teste;'  >/dev/null 2>&1
-psql -c 'CREATE DATABASE teste;'  >/dev/null 2>&1
+psql -c 'DROP DATABASE vacuum;'  >/dev/null 2>&1
+psql -c 'CREATE DATABASE vacuum;'  >/dev/null 2>&1
 if [[ "$?" == "0" ]] ; then
   echo "Yes it is"
-  psql -c 'DROP DATABASE teste;'  >/dev/null 2>&1
+  psql -c 'DROP DATABASE vacuum;'  >/dev/null 2>&1
   DBS=$(psql -l -t | egrep -v 'template[01]' | cut -d '|' -f 1 |sed -e '/^$\|^[[:space:]]\+$/d')
   for DATABASE in $DBS; do
     psql -c "ALTER DATABASE ${DATABASE} CONNECTION LIMIT 0;" >/dev/null 2>&1

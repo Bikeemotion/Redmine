@@ -1,4 +1,4 @@
-FROM ${REGISTRY}centos${FROM_DOCKERFILE_TAG}
+FROM ${FROM_DOCKERFILE_REGISTRY}centos${FROM_DOCKERFILE_TAG}
 MAINTAINER bikeemotion <backend@bikeemotion.com>
 
 ENV CONTAINER_VOLUME=/usr/local/src/redmine
@@ -29,7 +29,7 @@ RUN groupadd \
       libffi-devel-3.0.13-18.el7 \
       libyaml-devel-0.1.4-11.el7_0 \
       openssl-devel-1.0.1e-60.el7 \
-      rh-postgresql95-postgresql-9.5.2-2.el7 \
+      rh-postgresql95-postgresql-9.5.4-1.el7 \
       rh-ruby23-2.2-4.el7 \
       rh-ruby23-rubygem-bundler-1.10.6-4.el7 \
       zlib-devel-1.2.7-17.el7" && \

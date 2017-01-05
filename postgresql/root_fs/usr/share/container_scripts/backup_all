@@ -8,9 +8,9 @@ if [ "$(id -u)" != "${ID_POSTGRES}" ] ; then
 fi
 
 # check if this scritp is  being run in master or standby(s)
-psql -c 'CREATE DATABASE teste;'  >/dev/null 2>&1
+psql -c 'CREATE DATABASE backup;'  >/dev/null 2>&1
 if [[ "$?" == "0" ]] ; then
-  psql -c 'DROP DATABASE teste;' >/dev/null 2>&1
+  psql -c 'DROP DATABASE backup;' >/dev/null 2>&1
 else
 	exit 0
 fi
