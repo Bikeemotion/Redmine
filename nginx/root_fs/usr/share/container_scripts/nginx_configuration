@@ -6,10 +6,17 @@ set -e
 source "${CONTAINER_SCRIPTS_PATH}/variables_export"
 
 ls /usr/share/nginx/html/.well-known > /dev/null 2>&1 || mkdir /usr/share/nginx/html/.well-known
+
+# if letsencrypt directory is empty,  we start default nginx configuration and run certbot on it. After that we kill nginx and its child process
+test "$(ls -A /etc/letsencrypt)" || { nginx && \
+  /usr/bin/certbot certonly \
+    --non-interactive \
+    --agree-tos --email backend@${DNS_DOMAIN} \
+    --webroot -w /usr/share/nginx/html -d redmine.${DNS_DOMAIN} && \
+  kill -- -$(ps -o pgid= $(cat /run/nginx.pid) |grep -o [0-9]*); }
+
 ls /etc/nginx/conf.d/redmine.conf > /dev/null 2>&1 || { variables_to_replace '${DNS_DOMAIN}:${PUMA_HOST}' && \
-  envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/redmine.conf.templ" > "/etc/nginx/conf.d/redmine.conf"; }
-test "$(ls -A /etc/letsencrypt)" || /usr/bin/certbot certonly \
-  --non-interactive \
-  --agree-tos --email backend@${DNS_DOMAIN} \
-  --webroot -w /usr/share/nginx/html -d redmine.${DNS_DOMAIN}
+  envsubst "${VARIABLES_TO_REPLACE}" < "${CONTAINER_SCRIPTS_PATH}/redmine.conf.templ" > "/etc/nginx/conf.d/redmine.conf" && \
+  cp ${CONTAINER_SCRIPTS_PATH}/nginx.conf /etc/nginx/nginx.conf; }
+
 nginx -t
