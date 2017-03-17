@@ -22,15 +22,15 @@ RUN groupadd \
       bzip2-1.0.6-13.el7 \
       gdbm-1.10-8.el7 \
       git-1.8.3.1-6.el7_2.1 \
-      git-annex-5.20140221-1.1.el7 \
+      git-annex-5.20140221-1.2.el7 \
       gitolite3-3.6.6-1.el7 \
       ImageMagick-6.7.8.9-15.el7_2 \
       ipa-pgothic-fonts-003.03-5.el7 \
       libffi-devel-3.0.13-18.el7 \
       libyaml-devel-0.1.4-11.el7_0 \
-      openssl-devel-1.0.1e-60.el7 \
+      openssl-devel-1.0.1e-60.el7_3.1 \
       rh-postgresql95-postgresql-9.5.4-1.el7 \
-      rh-ruby23-2.2-4.el7 \
+      rh-ruby23-2.2-7.el7 \
       rh-ruby23-rubygem-bundler-1.10.6-4.el7 \
       zlib-devel-1.2.7-17.el7" && \
     echo "Validating the existence of the following packages:" && \
@@ -53,7 +53,7 @@ ENV REDMINE_VERSION=3.3.0 \
 #ENV REDMINE_VERSION=3.3.1 \
 #REDMINE_DOWNLOAD_MD5=cb8aab3e03cae7d21d003a307e51c176
 
-ADD root_fs/ /
+COPY root_fs/ /
 
 # Get prefix path and path to scripts rather than hard-code them in scripts
 ENV ENABLED_COLLECTIONS="rh-postgresql95 rh-ruby23"

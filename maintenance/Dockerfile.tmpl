@@ -3,7 +3,7 @@ MAINTAINER bikeemotion
 
 RUN PKGS_TO_INSTALL="\
       cronie-1.4.11-14.el7_2.1 \
-      docker-1.10.3-46.el7.centos.14" && \
+      docker-1.12.6-11.el7.centos" && \
     echo "Validating the existence of the following packages:" && \
     for PKG in ${PKGS_TO_INSTALL}; do \
       (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \
@@ -14,7 +14,7 @@ RUN PKGS_TO_INSTALL="\
     rm -rf /etc/cron.daily/* && \
     rm -rf /etc/cron.hourly/*
 
-ADD root_fs/ /
+COPY root_fs/ /
 
 #CMD ["infinite_loop"]
 CMD ["crond","-n","-x","load"]

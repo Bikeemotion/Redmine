@@ -37,16 +37,15 @@ DBS=$($PSQL -l -t | grep UTF8 | egrep -v 'template[01]' | cut -d '|' -f 1 |sed -
 
 # now loop through each individual database and backup the schema and data separately
 for database in $DBS; do
-  SCHEMA=$DIR/$database.schema.gz
-  DATA=$DIR/$database.data.gz
-
+  #SCHEMA=$DIR/$database.schema.gz
+  #DATA=$DIR/$database.data.gz
   # export data from postgres databases to plain text
-  echo "pg_dump schema of $database..."
-  $PGDUMP -s $database | gzip -9 > $SCHEMA
-
+  #echo "pg_dump schema of $database..."
+  #$PGDUMP -s $database | gzip -9 > $SCHEMA
   # dump data
-  echo "pg_dump data of $database..."
-  $PGDUMP -a $database | gzip -9 > $DATA
+  #echo "pg_dump data of $database..."
+  #$PGDUMP -a $database | gzip -9 > $DATA
+  $PGDUMP ${database} | gzip -9 > ${DIR}/${database}.gz
 done
 
 # delete backup files older than 30 days

@@ -94,6 +94,7 @@ function redmine_upgrade() {
   cp ${CONTAINER_VOLUME}/in_use/config/configuration.yml ${REDMINE_LOCATION}/config/configuration.yml > /dev/null 2>&1
   cp -R ${CONTAINER_VOLUME}/in_use/files/* ${REDMINE_LOCATION}/files/ > /dev/null 2>&1
   cp -R ${CONTAINER_VOLUME}/in_use/plugins/* ${REDMINE_LOCATION}/plugins/ > /dev/null 2>&1
+  cp -R ${CONTAINER_VOLUME}/in_use/public/* ${REDMINE_LOCATION}/public/ > /dev/null 2>&1
   bundle_execution
   PREVIOUS_VERSION=$(redmine_inuse)
   echo "${PREVIOUS_VERSION}" > ${REDMINE_LOCATION}/previous_used_redmine_version

@@ -15,10 +15,10 @@ RUN groupadd \
     rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 \
       --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo && \
     PKGS_TO_INSTALL="\
-      git-annex-5.20140221-1.1.el7 \
+      git-annex-5.20140221-1.2.el7 \
       gitolite3-3.6.6-1.el7 \
-      openssh-server-6.6.1p1-31.el7 \
-      rh-ruby23-2.2-4.el7" && \
+      openssh-server-6.6.1p1-33.el7_3 \
+      rh-ruby23-2.2-7.el7" && \
     echo "Validating the existence of the following packages:" && \
     for PKG in ${PKGS_TO_INSTALL}; do \
       (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \
@@ -31,7 +31,7 @@ RUN groupadd \
     ssh-keygen -q -t ed25519 -N '' -f /etc/ssh/ssh_host_ed25519_key < /dev/null && \
     ssh-keygen -q -t rsa -N '' -b 4096 -f /etc/ssh/ssh_host_rsa_key < /dev/null
 
-ADD root_fs/ /
+COPY root_fs/ /
 
 # Get prefix path and path to scripts rather than hard-code them in scripts
 ENV ENABLED_COLLECTIONS="rh-ruby23"
