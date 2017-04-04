@@ -6,7 +6,7 @@ set -e
 source "${CONTAINER_SCRIPTS_PATH}/variables_export"
 source "${CONTAINER_SCRIPTS_PATH}/cgroup_limits"
 
-MAX_SESSIONS=$(awk -v NC="${NUMBER_OF_CORES}" 'BEGIN { print 2*NC+1 }')
+MAX_SESSIONS=$(awk -v NC="${NUMBER_OF_CORES}" 'BEGIN { print 2*NC+3 }')
 GIT_WINDOWS_MEMORY=$(awk -v MS="${MAX_SESSIONS}" -v MLM="${MEMORY_LIMIT_IN_MEGABYTES}" 'BEGIN { print MLM/MS }' | cut -d. -f1)
 GIT_PACKED_GIT_LIMIT=$(awk -v GWM="${GIT_WINDOWS_MEMORY}" 'BEGIN { print GWM/4 }' | cut -d. -f1)
 GIT_PACKED_GIT_WINDOW_SIZE=$(awk -v GPGL="${GIT_PACKED_GIT_LIMIT}" 'BEGIN { print GPGL/8 }' | cut -d. -f1)
