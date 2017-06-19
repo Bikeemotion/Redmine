@@ -15,6 +15,7 @@ RUN groupadd \
     useradd \
       -u 1051 \
       -g redmine \
+      -G gitolite3 \
       -M -d ${CONTAINER_VOLUME} redmine && \
     rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo \
       --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 && \

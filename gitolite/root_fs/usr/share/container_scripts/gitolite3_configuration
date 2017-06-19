@@ -18,6 +18,13 @@ ls "${CONTAINER_VOLUME}"/.ssh/gitolite_admin > /dev/null 2>&1 || su gitolite3 -c
 ls "${CONTAINER_VOLUME}"/.ssh/config > /dev/null 2>&1 || su - gitolite3 -c "echo -e 'Host localhost\nHostname localhost\nPort 2222\nUser gitolite3\nIdentityFile ~/.ssh/gitolite_admin\nStrictHostKeyChecking no\nUserKnownHostsFile /dev/null' > ~/.ssh/config && chmod 0600 .ssh/config"
 ls "${CONTAINER_VOLUME}"/.ssh/environment > /dev/null 2>&1 || su - gitolite3 -c "scl enable rh-ruby23 env > ~/.ssh/environment && chmod 0600 ~/.ssh/environment"
 ls "${CONTAINER_VOLUME}"/.gitolite.rc > /dev/null 2>&1 || su - gitolite3 -c "gitolite setup -pk ~/.ssh/gitolite_admin.pub"
+# http://gitolite.com/gitolite/rc/
+fgrep "#'gitweb'" .gitolite.rc > /dev/null 2>&1 || { sed -i "/UMASK/ s|0077,|0027,|g; \
+  /GIT_CONFIG_KEYS/ s|''|'.*'|g; \
+  /ENV{HOME}\/local/ s|# LOCAL_CODE|LOCAL_CODE|g; \
+  s|'daemon',|#'daemon',|g; \
+  s|'gitweb',|#'gitweb',|g" "${CONTAINER_VOLUME}"/.gitolite.rc && \
+  sed -ie "/# COMMANDS/i \ \t# enable the git-annex-shell command\n\t'git-annex-shell ua',\n" "${CONTAINER_VOLUME}"/.gitolite.rc; }
 # Git repack's memory use is: (pack.deltaCacheSize + pack.windowMemory) × pack.threads. Respective defaults are 256MiB, unlimited, nproc.
 ls "${CONTAINER_VOLUME}"/.gitconfig > /dev/null 2>&1 || (su - gitolite3 -c "git config --global user.name gitolite3 && \
   git config --global user.email gitolite3@$(hostname) && \
@@ -28,8 +35,3 @@ ls "${CONTAINER_VOLUME}"/.gitconfig > /dev/null 2>&1 || (su - gitolite3 -c "git 
   git config --global pack.packSizeLimit ${GIT_WINDOWS_MEMORY}m && \
   git config --global core.packedGitLimit ${GIT_PACKED_GIT_LIMIT}m && \
   git config --global core.packedGitWindowSize ${GIT_PACKED_GIT_WINDOW_SIZE}m")
-fgrep "#'gitweb'" .gitolite.rc > /dev/null 2>&1 || { sed -i "/GIT_CONFIG_KEYS/ s|''|'.*'|g; \
-  /ENV{HOME}\/local/ s|# LOCAL_CODE|LOCAL_CODE|g; \
-  s|'daemon',|#'daemon',|g; \
-  s|'gitweb',|#'gitweb',|g" "${CONTAINER_VOLUME}"/.gitolite.rc && \
-  sed -ie "/# COMMANDS/i \ \t# enable the git-annex-shell command\n\t'git-annex-shell ua',\n" "${CONTAINER_VOLUME}"/.gitolite.rc; }
