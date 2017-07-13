@@ -20,20 +20,20 @@ RUN groupadd \
     rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo \
       --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 && \
     PKGS_TO_INSTALL="\
-      bzip2-1.0.6-13.el7 \
-      gdbm-1.10-8.el7 \
-      git-1.8.3.1-6.el7_2.1 \
-      git-annex-5.20140221-1.2.el7 \
-      gitolite3-3.6.6-1.el7 \
-      ImageMagick-6.7.8.9-15.el7_2 \
-      ipa-pgothic-fonts-003.03-5.el7 \
-      libffi-devel-3.0.13-18.el7 \
-      libyaml-devel-0.1.4-11.el7_0 \
-      openssl-devel-1.0.1e-60.el7_3.1 \
-      rh-postgresql95-postgresql-9.5.4-1.el7 \
-      rh-ruby23-2.2-7.el7 \
-      rh-ruby23-rubygem-bundler-1.10.6-4.el7 \
-      zlib-devel-1.2.7-17.el7" && \
+      bzip2-1.0.6-* \
+      gdbm-1.10-* \
+      git-1.8.3.1-* \
+      git-annex-5.20140221-* \
+      gitolite3-3.6.6-* \
+      ImageMagick-6.7.8.9-* \
+      ipa-pgothic-fonts-003.03-* \
+      libffi-devel-3.0.13-* \
+      libyaml-devel-0.1.4-* \
+      openssl-devel-1.0.1e-* \
+      rh-postgresql95-postgresql-9.5.4-* \
+      rh-ruby23-2.2-* \
+      rh-ruby23-rubygem-bundler-1.10.6-* \
+      zlib-devel-1.2.7-*" && \
     echo "Validating the existence of the following packages:" && \
     for PKG in ${PKGS_TO_INSTALL}; do \
       (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \

@@ -2,8 +2,8 @@ FROM ${FROM_DOCKERFILE_REGISTRY}centos${FROM_DOCKERFILE_TAG}
 MAINTAINER bikeemotion
 
 RUN PKGS_TO_INSTALL="\
-      cronie-1.4.11-14.el7_2.1 \
-      docker-1.12.6-11.el7.centos" && \
+      cronie-1.4.11-* \
+      docker-1.12.6-*" && \
     echo "Validating the existence of the following packages:" && \
     for PKG in ${PKGS_TO_INSTALL}; do \
       (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \

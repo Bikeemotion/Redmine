@@ -15,10 +15,10 @@ RUN groupadd \
     rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7 \
       --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo && \
     PKGS_TO_INSTALL="\
-      git-annex-5.20140221-1.2.el7 \
-      gitolite3-3.6.6-1.el7 \
-      openssh-server-6.6.1p1-33.el7_3 \
-      rh-ruby23-2.2-7.el7" && \
+      git-annex-5.20140221-* \
+      gitolite3-3.6.6-* \
+      openssh-server-6.6.1p1-* \
+      rh-ruby23-2.2-*" && \
     echo "Validating the existence of the following packages:" && \
     for PKG in ${PKGS_TO_INSTALL}; do \
       (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \

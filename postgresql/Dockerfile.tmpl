@@ -6,9 +6,9 @@ ENV PGDATA=${CONTAINER_VOLUME}/data
 
 RUN rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo && \
     PKGS_TO_INSTALL="\
-      rh-postgresql95-postgresql-contrib-9.5.4-1.el7 \
-      rh-postgresql95-postgresql-server-9.5.4-1.el7 \
-      rsync-3.0.9-17.el7" && \
+      rh-postgresql95-postgresql-contrib-9.5.4-* \
+      rh-postgresql95-postgresql-server-9.5.4-* \
+      rsync-3.0.9-*" && \
     echo "Validating the existence of the following packages:" && \
     for PKG in ${PKGS_TO_INSTALL}; do \
       (echo "${PKG}" && yum info ${PKG} >> /dev/null 2>&1) || exit 1; \
